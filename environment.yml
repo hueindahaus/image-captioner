@@ -1,0 +1,17 @@
+name: ic
+channels:
+  - defaults
+  - pytorch
+dependencies:
+  - python=3.7
+  - pip
+  - numpy
+  - jupyter
+  - matplotlib
+  - pytorch=1.9.0
+  - torchvision
+  - cudatoolkit=10.2
+  - freetype=2.10.4
+  - tqdm
+  - pip:
+      - kaggle
