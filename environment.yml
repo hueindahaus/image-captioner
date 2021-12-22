@@ -13,5 +13,9 @@ dependencies:
   - cudatoolkit=10.2
   - freetype=2.10.4
   - tqdm
+  - pandas
+  - gensim
+  - tensorboard
+  - scikit-image
   - pip:
       - kaggle
