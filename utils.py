@@ -3,6 +3,8 @@ import matplotlib.cm as cm
 import torch
 import numpy as np
 from skimage import transform
+import torchvision.transforms as T
+
 
 def display_image(axis, image_tensor):
     if not isinstance(image_tensor, torch.Tensor):
@@ -38,30 +40,28 @@ class Stat:
     def average(self):
         return self.sum/self.count
 
-def visualize_attention(img, alphas, caption, smooth=False):
-    """
-    param img: image tensor (1, 3, img_dim, img_dim)
-    param caption: caption list (1, caption_length)
-    param alphas: weights of image (1, num_pixels)
-    """
+def visualize_attention(img, alphas, caption, invert_normalization = True):
+
+    if invert_normalization:
+        inv_normalize = T.Normalize( mean=[-0.485/0.229, -0.456/0.224, -0.406/0.225],std=[1/0.229, 1/0.224, 1/0.255])
+        img = inv_normalize(img)
 
     img = img.squeeze(dim=0).permute(1, 2, 0).cpu().detach().numpy()
-    alphas = alphas.unflatten(dim=2, sizes=(14,14)).squeeze(dim=0).cpu().detach().numpy()
-    caption = caption[0]
+    alphas = alphas.unflatten(dim=1, sizes=(14,14)).cpu().detach().numpy()
 
     height, width, _ = img.shape
-    plt.figure(figsize=(20,40))
+    num_cols = 5
+    num_rows = int(np.ceil(len(caption) / float(num_cols)))
+    img_size = 4
+    plt.figure(figsize=(num_cols * img_size ,num_rows * img_size))
 
     for t in range(len(caption)):
-        plt.subplot(int(np.ceil(len(caption) / 5.)), 5, t + 1)
-        plt.text(0, 1, '%s' % (caption[t]), color='black', backgroundcolor='white', fontsize=12)
+        plt.subplot(num_rows, num_cols, t + 1)
+        plt.text(0, 20, '%s' % (caption[t]), color='black', backgroundcolor='white', fontsize=12)
         
-        plt.imshow(img)
+        plt.imshow(np.clip(img, 0, 1))
         current_alpha = alphas[t]
-        if smooth:
-            current_alpha = transform.pyramid_expand(current_alpha, upscale=24, sigma=8)
-        else:
-            current_alpha = transform.resize(current_alpha, [14 * 21, 14 * 21])
+        current_alpha = transform.resize(current_alpha, [14 * 21, 14 * 21])
 
         plt.imshow(current_alpha, alpha = 0.8 if t > 0 else 0)
         #plt.xlim([0, width])

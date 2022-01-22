@@ -6,9 +6,10 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn # Includes all modules, nn.Linear, nn.Conv2d, BatchNorm etc
 import torch.optim as optim # Is used for otimization algorithms such as Adam, SGD ...
+from torch.nn.utils.rnn import pack_padded_sequence
+
 from torch.utils.data import DataLoader # Helps with managing datasets in mini batches
 from torch.utils.data import Dataset
-from torch.nn.utils.rnn import pack_padded_sequence
 from torch.utils.tensorboard import SummaryWriter # to print to tensorboard
 import torchvision
 import torchvision.datasets as datasets # Has standard datasets
@@ -16,39 +17,37 @@ import torchvision.transforms as transforms # Transformations to be used on imag
 import torchvision.transforms as T
 import torchvision.transforms.functional as F
 
+from nltk.translate.bleu_score import corpus_bleu   # Used to compute bleu score
+
 from datetime import datetime
 
 from utils import Stat, visualize_attention
-import config
+from simloss import SimLoss
 
 
-device = config.DEVICE
-
-def train(data, encoder, decoder, vocab):
+def train(model_handler):
 
     print('Starting training..')
     torch.cuda.empty_cache()
 
-    decoder = decoder.to(device)
-    encoder = encoder.to(device)
+    # Load models and all other hyper/training parameters
+    data, vocab, encoder, decoder, encoder_optimizer, decoder_optimizer, config = model_handler.load()
 
-    num_epochs = config.NUM_EPOCHS
-    batch_size = config.BATCH_SIZE
-    num_workers = config.NUM_WORKERS
-    encoder_lr = config.ENCODER_LR
-    decoder_lr = config.DECODER_LR
+    num_epochs = config['NUM_EPOCHS']
+    batch_size = config['BATCH_SIZE']
+    num_workers = config['NUM_WORKERS']
+    start_epoch = config['START_EPOCH']
+    device = config['DEVICE']
 
-    encoder_optimizer = optim.Adam(encoder.parameters(), lr=encoder_lr)
-    decoder_optimizer = optim.Adam(decoder.parameters(), lr=decoder_lr)
+    # lr decay on decoder
+    decoder_scheduler = optim.lr_scheduler.ReduceLROnPlateau(decoder_optimizer, 'min', threshold = 1e-4, patience=20, factor=0.8, verbose=True, cooldown = 10)
 
-    train_data = data
-    val_data = data.split_data(0.1)
-    train_loader = DataLoader(train_data, batch_size, shuffle=True, num_workers=num_workers, collate_fn=train_data.collate_batch)
-    val_loader = DataLoader(val_data, batch_size, shuffle=True, num_workers=num_workers, collate_fn=val_data.collate_batch)
+    data_loader = DataLoader(data, batch_size, shuffle=True, num_workers=num_workers, collate_fn=data.collate_batch)
 
     criterion = nn.CrossEntropyLoss().to(device)
+    #criterion = SimLoss(vocab)
 
-    print_every_nth_batch = config.PRINT_EVERY_NTH_BATCH
+    print_every_nth_batch = config['PRINT_EVERY_NTH_BATCH']
 
     training_losses = Stat()
 
@@ -56,35 +55,45 @@ def train(data, encoder, decoder, vocab):
     writer = SummaryWriter(f'runs/logs/{now.strftime("%Y-%m-%d-h%Hm%M")}')
     step = 0
 
-    for epoch in range(num_epochs):
+    scheduled_sampling_p = 0    # Should stay between 0 and 1 and increases epochwise (curriculum training)
+
+    for epoch in range(start_epoch, num_epochs):
+
+        # Checkpoint
+        model_handler.checkpoint(encoder, decoder, encoder_optimizer, decoder_optimizer, config_dict = { **config, 'START_EPOCH': epoch  })
         
         encoder.train()
         decoder.train()
 
-        training_losses.clear()
+        scheduled_sampling_p = (epoch + 1)/num_epochs
 
-        for batch_index, (imgs, captions, caption_lengths) in enumerate(train_loader):
+        for batch_index, (imgs, captions, caption_lengths) in enumerate(data_loader):
 
-            #print(imgs.shape)
-            #print(captions.shape)
-            #print(caption_lengths.shape)
-            #print('-----')
-
+            # Make sure that tensors are set to correct device
             imgs = imgs.to(device)
             captions = captions.to(device)
             caption_lengths = caption_lengths.to(device)
             
+            # Forward images through encoder and obtain features
             features = encoder(imgs)
-            predictions, captions, output_lengths, alphas, sorted_indices = decoder(features, captions, caption_lengths)
 
+            # Forward features alogn with captions etc. through decoder to obtain predictions
+            predictions, captions, output_lengths, alphas, sorted_indices = decoder(features, captions, caption_lengths, scheduled_sampling_p=scheduled_sampling_p)
+
+            # Pack sequences (removes padding) and squeezes the tensors so that all predictions lie in one dimension
             predictions = pack_padded_sequence(predictions, output_lengths, batch_first = True).data
             targets = pack_padded_sequence(captions[:, 1:], output_lengths, batch_first = True).data
-        
+
+            # Calculate loss
             loss = criterion(predictions, targets)
-            # doubly stochastic attention regularization
+
+            # Add doubly stochastic attention regularization to the loss to encourage pixel alpha for each pixel across all timesteps to sum to 1
             loss += ((1. - alphas.sum(dim=1)) ** 2).mean()
+
+            # Add loss to stats
             training_losses(loss.item(), sum(output_lengths))
 
+            # Perform backprop
             decoder_optimizer.zero_grad()
             encoder_optimizer.zero_grad()
             loss.backward()
@@ -92,14 +101,15 @@ def train(data, encoder, decoder, vocab):
             encoder_optimizer.step()
 
             if batch_index > 0 and batch_index % print_every_nth_batch == 0:
-                print(f'[Epoch: {epoch + 1}, Batch: {batch_index}/{len(train_loader)}] Training loss: {training_losses.average()}')
+                decoder_scheduler.step(training_losses.average())                
 
-                # Inference example
+                # eval 
                 with torch.no_grad():
 
                     # Set eval mode to suppress dropout etc.
                     decoder.eval()
                     encoder.eval()
+                    data.eval()
 
                     # Fetch random image from batch
                     img = imgs[random.randint(0,len(imgs)-1)]
@@ -108,18 +118,39 @@ def train(data, encoder, decoder, vocab):
                     features = encoder.forward(torch.unsqueeze(img, dim=0).to(device))
 
                     # Generate caption with decoder
-                    seq_encoded, alphas = decoder.predict(features)
+                    preds, alphas = decoder.beam(features)
 
                     # decode generated sequence from integers to actual words
-                    seq_decoded = vocab.decode(seq_encoded.tolist())
+                    preds_decoded = vocab.decode(preds)
 
                     # Handle writer
                     writer.add_scalar('Training loss', training_losses.average(), global_step=step)
-                    writer.add_figure('Inference example', visualize_attention(img, alphas, seq_decoded), global_step=step)
+                    writer.add_figure('Inference example', visualize_attention(img, alphas[0], preds_decoded[0]), global_step=step)
+
+                    #validation loop
+                    hypotheses = []
+                    references = []
+                    for i, (imgs, captions) in enumerate(data_loader):
+                        imgs = imgs.to(device)
+                        features = encoder(imgs)
+                        preds, _ = decoder.beam(features)
+                        # Get rid of <start> and <eos> (In the case of max length sentences where <eos> is missing, we simply shave off last token anyway)
+                        generated_captions = vocab.decode([pred[1:-1] for pred in preds])
+                        references.extend(captions)
+                        hypotheses.extend(generated_captions)
+                        
+                    bleu = corpus_bleu(references, hypotheses)
+                    writer.add_scalar('Bleu', bleu, global_step=step)
 
                     # Set train mode to enable dropout etc.
                     decoder.train()
                     encoder.train()
+                    data.train()
+
+                    print(f'[Epoch: {epoch + 1}/{num_epochs}, Batch: {batch_index}/{len(data_loader)}] Training loss: {training_losses.average()} Bleu: {bleu}')
+
+                
+                training_losses.clear()
 
                 step += 1
 

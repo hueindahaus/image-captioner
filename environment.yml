@@ -17,5 +17,6 @@ dependencies:
   - gensim
   - tensorboard
   - scikit-image
+  - nltk
   - pip:
       - kaggle

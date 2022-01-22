@@ -118,3 +118,6 @@ dmypy.json
 
 # tensorboard folder
 /runs
+
+# checkpoints
+/checkpoints
