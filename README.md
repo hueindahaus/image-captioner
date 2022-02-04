@@ -7,8 +7,6 @@ This repository presents a deep learning based system for captioning images insp
 
 ![a-black-dog-is-running-on-the-sand](https://user-images.githubusercontent.com/45295311/152454931-03dc974c-bfb2-4e25-8790-2059d091816a.png)
 
-![a-group-of-soccer-players-are-playing-soccer](https://user-images.githubusercontent.com/45295311/152454914-c6086038-1ea1-4be0-ac77-9cb93c61c8c2.png)
-
 ![two-men-are-playing-volleyball-on-a-beach](https://user-images.githubusercontent.com/45295311/152454956-7287e441-8957-4819-b247-ede5e7f2a6e0.png)
 
 
