@@ -1,4 +1,4 @@
-# Image Captioner :camera: :arrow_right: :computer: :arrow_right: :speech_balloon:
+# Image Captioner :camera: => :computer: => :speech_balloon:
 
 This repository presents a deep learning based system for captioning images inspired by [sgrvinod's IC-System](https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Image-Captioning) and [Bottom-Up IC-System](https://arxiv.org/pdf/1707.07998.pdf). The implementation is done in pytorch.
 
