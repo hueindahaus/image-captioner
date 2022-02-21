@@ -8,38 +8,4 @@ This repository presents a deep learning based system for captioning images insp
 
 ![two-men-are-playing-volleyball-on-a-beach](https://user-images.githubusercontent.com/45295311/152454956-7287e441-8957-4819-b247-ede5e7f2a6e0.png)
 
-
-## Image captioning concept
-- step 1
-- step 2
-- step 3...
--
-
-
-
-## Model architecture
-- Model architecture are highly inspired by [SRGAN](https://arxiv.org/abs/1609.04802) with modifications brought by [ESRGAN](https://arxiv.org/abs/1809.00219).
-
-![gan-architecture](https://user-images.githubusercontent.com/45295311/139563996-84b435e2-8580-47c5-9b40-340f4bb592e0.png)
-
-
-## Inception-residual block
-- In this project, inception-residual blocks are considered instead of regular residual blocks (from SRGAN) or residual in residual dense block (from ESRGAN)
-
-![inception-residual-block (2)](https://user-images.githubusercontent.com/45295311/139563156-970bbf47-e071-4feb-87ad-c2ece40bd13c.png)
-
-
-## Other details
-- Relativistic discriminator is used for a more stable and contextual training phase
-- Generator perceptual loss considers pixel wise loss, feature extracted loss from a pretrained VGG19-network and adversarial loss based on discriminator's performance
-
-
-## Results
-- Result are presented in (PSNR/SSIM) where PSNR is peak signal to noise ratio and SSIM is structural similarity index measure.
-
-![gan-results](https://user-images.githubusercontent.com/45295311/139563229-abbe62c1-d619-4a03-be34-7c61fd70c904.png)
-
-> ⚠️ Disclaimer: Good code design was not the top priority due to the project's time constraint.
-
-
-
+> ⚠️ Disclaimer: Code design was not the top priority due to the project's time constraint.
