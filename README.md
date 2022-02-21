@@ -8,4 +8,6 @@ This repository presents a deep learning based system for captioning images insp
 
 ![two-men-are-playing-volleyball-on-a-beach](https://user-images.githubusercontent.com/45295311/152454956-7287e441-8957-4819-b247-ede5e7f2a6e0.png)
 
+> Documentation & description of concept coming soon..
+
 > ⚠️ Disclaimer: Code design was not the top priority due to the project's time constraint.
